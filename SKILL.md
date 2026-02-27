@@ -19,6 +19,19 @@ Use bundled scripts and templates instead of rebuilding orchestrators from scrat
 ## Deploy
 Use this when the user asks to initialize a new workspace.
 
+Fastest path (wrapper):
+
+```bash
+python3 scripts/setup_autopilot.py \
+  --output-dir /path/to/workdir \
+  --repo-url https://github.com/<owner>/<repo>.git \
+  --config-profile production \
+  --token "<github_token>" \
+  --run-doctor \
+  --run-once \
+  --force
+```
+
 ```bash
 python3 scripts/deploy_autopilot.py \
   --output-dir /path/to/workdir \
@@ -141,6 +154,8 @@ When users ask to improve behavior, patch in this order:
 ## Bundled Files
 - `scripts/deploy_autopilot.py`: deploy templates + apply practical overrides.
 - `scripts/doctor_autopilot.py`: host and config diagnostics.
+- `scripts/setup_autopilot.py`: one-command setup wrapper for deploy + optional doctor/once run.
+- `scripts/log_summary.py`: summarize round and event logs quickly.
 - `assets/templates/openclaw_autopilot.py`: orchestrator template.
 - `assets/templates/openclaw_config.json`: default runtime config.
 - `assets/templates/openclaw_config.production.json`: production baseline config.

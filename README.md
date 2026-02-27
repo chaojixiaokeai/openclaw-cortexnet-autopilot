@@ -39,6 +39,8 @@ If a round only changes docs or changes are below threshold, it is treated as fa
 - `assets/templates/start_openclaw.sh`: unattended launcher
 - `scripts/deploy_autopilot.py`: deploy and configure a runnable workspace
 - `scripts/doctor_autopilot.py`: environment and config diagnostics
+- `scripts/setup_autopilot.py`: one-command workspace setup wrapper
+- `scripts/log_summary.py`: summarize run logs quickly
 - `references/`: operations and troubleshooting playbooks
 
 ## Prerequisites
@@ -47,6 +49,24 @@ If a round only changes docs or changes are below threshold, it is treated as fa
 - Git
 - At least one available coding CLI in PATH (`codex`, `gemini`, `open-code`, or `claude`)
 - GitHub token with repo write permissions
+
+## Fastest Setup (One Command)
+
+```bash
+python3 scripts/setup_autopilot.py \
+  --output-dir /path/to/workdir \
+  --repo-url https://github.com/<owner>/<repo>.git \
+  --project-name <project-name> \
+  --config-profile production \
+  --token '<your_github_token>' \
+  --run-doctor \
+  --run-once \
+  --force
+```
+
+Notes:
+- `--token` writes token into `/path/to/workdir/.env` as `GITHUB_TOKEN=...`
+- remove `--run-once` if you only want provisioning
 
 ## Quick Start (Production)
 
@@ -94,6 +114,16 @@ python3 openclaw_autopilot.py --config openclaw_config.json --cli-order gemini,c
 python3 openclaw_autopilot.py --config openclaw_config.json --interactive-cli codex --interactive-max-turns 5
 ```
 
+## Log Inspection
+
+```bash
+# Human-readable
+python3 scripts/log_summary.py --log-dir /path/to/workdir/logs
+
+# JSON
+python3 scripts/log_summary.py --log-dir /path/to/workdir/logs --json
+```
+
 ## Safety Notes
 
 - Target branch is `dev` by default.
@@ -102,4 +132,4 @@ python3 openclaw_autopilot.py --config openclaw_config.json --interactive-cli co
 
 ## License
 
-Use and adapt under your repository policy.
+MIT. See [LICENSE](./LICENSE).

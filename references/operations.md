@@ -8,6 +8,20 @@
 5. Confirm `first_round_report.md` and `round_reports.jsonl`.
 6. Start long-running loop.
 
+## One-Command Provisioning
+If you want deploy + optional doctor/once in one step:
+
+```bash
+python3 scripts/setup_autopilot.py \
+  --output-dir /path/to/workdir \
+  --repo-url https://github.com/<owner>/<repo>.git \
+  --config-profile production \
+  --token "<github_token>" \
+  --run-doctor \
+  --run-once \
+  --force
+```
+
 ## Recommended Deploy Command
 ```bash
 python3 scripts/deploy_autopilot.py \
@@ -82,6 +96,12 @@ Disable fallback only when strict "CLI must self-report" behavior is required.
 - `logs/first_round_report.md`: first round human-readable summary
 - `logs/runner.stdout.log`: launcher stdout/stderr aggregation
 - `logs/PAUSED_REASON.txt`: latest pause reason snapshot for watchdog/monitoring
+
+Quick summary command:
+
+```bash
+python3 scripts/log_summary.py --log-dir /path/to/workdir/logs
+```
 
 ## Token Env Override
 Use custom token env name when needed:
