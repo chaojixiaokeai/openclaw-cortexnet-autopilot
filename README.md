@@ -41,6 +41,8 @@ If a round only changes docs or changes are below threshold, it is treated as fa
 - `scripts/doctor_autopilot.py`: environment and config diagnostics
 - `scripts/setup_autopilot.py`: one-command workspace setup wrapper
 - `scripts/log_summary.py`: summarize run logs quickly
+- `scripts/install_skill.py`: install this repo into your local Codex skills directory
+- `scripts/smoke_test_deploy.py`: offline smoke test for deploy/runtime templates
 - `references/`: operations and troubleshooting playbooks
 
 ## Prerequisites
@@ -67,6 +69,18 @@ python3 scripts/setup_autopilot.py \
 Notes:
 - `--token` writes token into `/path/to/workdir/.env` as `GITHUB_TOKEN=...`
 - remove `--run-once` if you only want provisioning
+
+## Install As Codex Skill
+
+```bash
+python3 scripts/install_skill.py --force
+```
+
+Optional custom location:
+
+```bash
+python3 scripts/install_skill.py --target-root /path/to/codex_home/skills --force
+```
 
 ## Quick Start (Production)
 
@@ -120,8 +134,17 @@ python3 openclaw_autopilot.py --config openclaw_config.json --interactive-cli co
 # Human-readable
 python3 scripts/log_summary.py --log-dir /path/to/workdir/logs
 
+# Human-readable with custom latest rounds window
+python3 scripts/log_summary.py --log-dir /path/to/workdir/logs --tail-rounds 10
+
 # JSON
 python3 scripts/log_summary.py --log-dir /path/to/workdir/logs --json
+```
+
+## Contributor Smoke Test
+
+```bash
+python3 scripts/smoke_test_deploy.py
 ```
 
 ## Safety Notes

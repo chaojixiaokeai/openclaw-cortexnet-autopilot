@@ -23,7 +23,9 @@ jobs:
             scripts/deploy_autopilot.py \
             scripts/doctor_autopilot.py \
             scripts/setup_autopilot.py \
-            scripts/log_summary.py
+            scripts/log_summary.py \
+            scripts/install_skill.py \
+            scripts/smoke_test_deploy.py
 
       - name: Deploy Script Help Smoke
         run: |
@@ -31,3 +33,8 @@ jobs:
           python scripts/doctor_autopilot.py --help
           python scripts/setup_autopilot.py --help
           python scripts/log_summary.py --help
+          python scripts/install_skill.py --help
+
+      - name: Offline Deploy Smoke Test
+        run: |
+          python scripts/smoke_test_deploy.py

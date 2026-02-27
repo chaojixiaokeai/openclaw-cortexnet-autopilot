@@ -156,6 +156,8 @@ When users ask to improve behavior, patch in this order:
 - `scripts/doctor_autopilot.py`: host and config diagnostics.
 - `scripts/setup_autopilot.py`: one-command setup wrapper for deploy + optional doctor/once run.
 - `scripts/log_summary.py`: summarize round and event logs quickly.
+- `scripts/install_skill.py`: install this skill repo into local Codex skills directory.
+- `scripts/smoke_test_deploy.py`: offline smoke test for deploy/runtime templates.
 - `assets/templates/openclaw_autopilot.py`: orchestrator template.
 - `assets/templates/openclaw_config.json`: default runtime config.
 - `assets/templates/openclaw_config.production.json`: production baseline config.

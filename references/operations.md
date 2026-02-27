@@ -22,6 +22,13 @@ python3 scripts/setup_autopilot.py \
   --force
 ```
 
+## Install Skill Into Codex
+Use this when distributing to other machines:
+
+```bash
+python3 scripts/install_skill.py --force
+```
+
 ## Recommended Deploy Command
 ```bash
 python3 scripts/deploy_autopilot.py \
@@ -101,6 +108,14 @@ Quick summary command:
 
 ```bash
 python3 scripts/log_summary.py --log-dir /path/to/workdir/logs
+python3 scripts/log_summary.py --log-dir /path/to/workdir/logs --tail-rounds 10
+```
+
+## Contributor Validation
+Run an offline smoke test before publishing changes:
+
+```bash
+python3 scripts/smoke_test_deploy.py
 ```
 
 ## Token Env Override

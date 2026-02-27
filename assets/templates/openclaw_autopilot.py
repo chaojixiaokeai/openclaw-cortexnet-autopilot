@@ -390,15 +390,27 @@ def run_cmd(
     cwd: Optional[Path] = None,
     timeout: int = 300,
 ) -> Tuple[int, str]:
-    proc = subprocess.run(
-        args,
-        cwd=str(cwd) if cwd else None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        timeout=timeout,
-    )
-    return proc.returncode, proc.stdout or ""
+    try:
+        proc = subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=timeout,
+        )
+        return proc.returncode, proc.stdout or ""
+    except subprocess.TimeoutExpired as e:
+        out = ""
+        if isinstance(e.stdout, bytes):
+            out = e.stdout.decode("utf-8", errors="ignore")
+        elif isinstance(e.stdout, str):
+            out = e.stdout
+        return 124, (out or f"timeout after {timeout}s")
+    except FileNotFoundError as e:
+        return 127, f"command_not_found:{e}"
+    except OSError as e:
+        return 126, f"os_error:{e}"
 
 
 def verify_github_token(cfg: RuntimeConfig, token: str, logger: EventLogger) -> bool:
