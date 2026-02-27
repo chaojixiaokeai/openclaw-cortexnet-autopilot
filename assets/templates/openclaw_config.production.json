@@ -35,6 +35,8 @@
   "commit_message_template": "[迭代升级] {project} 核心优化：{core} | 测试通过率{rate}% | 变更：{changes}",
   "error_keywords": [
     "quota exceeded",
+    "usage limit",
+    "upgrade to pro",
     "authentication failed",
     "permission denied",
     "rate limit",
@@ -55,6 +57,11 @@
   },
   "progress_probe_message": "进度校验：你是否仍在正常执行？请给出预计剩余时间和当前进度百分比。",
   "auto_confirm_reply": "yes",
+  "strict_require_real_report": true,
+  "save_cli_transcripts": true,
+  "codex_resume_on_incomplete": true,
+  "codex_resume_max_attempts": 1,
+  "codex_resume_prompt": "继续未完成任务：必须立刻完成实际代码修改、运行测试、写出报告并输出REPORT_READY；禁止只输出计划。",
   "fallback_report": {
     "enabled": true,
     "run_tests_on_missing_report": true,

@@ -78,10 +78,15 @@ High-impact keys:
 - `init_phase.idle_seconds`: no-output threshold during init.
 - `init_phase.max_runtime_seconds`: hard cap during init.
 - `report_min_pass_rate`: audit threshold.
+- `strict_require_real_report`: when true, fallback-only reports cannot pass approval.
 - `require_code_changes`: when true, `no_changes` result is treated as failed and enters redo/switch flow.
 - `require_non_doc_code_changes`: when true, docs-only changes are treated as failed and enters redo/switch flow.
 - `minimum_non_doc_files_changed`: minimum count of changed non-doc files required for approval.
 - `minimum_non_doc_lines_changed`: minimum changed non-doc lines (add+del) required for approval.
+- `codex_resume_on_incomplete`: when Codex exits without report, auto-resume same session before fallback/switch.
+- `codex_resume_max_attempts`: max number of auto-resume attempts.
+- resume runs with writable sandbox policy (`--full-auto` + workspace-write override).
+- `save_cli_transcripts`: persist per-attempt raw output into `logs/cli_transcripts/`.
 - runtime remote sync: before each CLI attempt, runtime fetches and hard-resets to remote latest branch.
 - `preserve_untracked_paths`: paths excluded from `git clean` so init artifacts survive refresh rounds.
 - `never_commit_paths`: paths forcibly unstaged before commit, preventing local CLI metadata from being pushed.
@@ -103,6 +108,7 @@ Disable fallback only when strict "CLI must self-report" behavior is required.
 - `logs/first_round_report.md`: first round human-readable summary
 - `logs/runner.stdout.log`: launcher stdout/stderr aggregation
 - `logs/PAUSED_REASON.txt`: latest pause reason snapshot for watchdog/monitoring
+- `logs/cli_transcripts/*`: per-attempt raw output for root-cause analysis
 
 Quick summary command:
 

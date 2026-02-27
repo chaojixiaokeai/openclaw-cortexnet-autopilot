@@ -79,6 +79,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "commit_message_template": "[迭代升级] {project} 核心优化：{core} | 测试通过率{rate}% | 变更：{changes}",
     "error_keywords": [
         "quota exceeded",
+        "usage limit",
+        "upgrade to pro",
         "authentication failed",
         "permission denied",
         "rate limit",
@@ -99,6 +101,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "progress_probe_message": "进度校验：你是否仍在正常执行？请给出预计剩余时间和当前进度百分比。",
     "auto_confirm_reply": "yes",
+    "strict_require_real_report": False,
+    "save_cli_transcripts": True,
+    "codex_resume_on_incomplete": True,
+    "codex_resume_max_attempts": 1,
+    "codex_resume_prompt": (
+        "继续你刚才未完成的任务，不要重复计划。"
+        "必须立即完成代码修改、执行测试、写出 JSON 报告并输出 REPORT_READY。"
+        "若仍无法完成，写出失败报告后退出。"
+    ),
     "fallback_report": {
         "enabled": True,
         "run_tests_on_missing_report": True,
@@ -214,6 +225,11 @@ class RuntimeConfig:
     init_max_runtime_seconds: int
     progress_probe_message: str
     auto_confirm_reply: str
+    strict_require_real_report: bool
+    save_cli_transcripts: bool
+    codex_resume_on_incomplete: bool
+    codex_resume_max_attempts: int
+    codex_resume_prompt: str
     fallback_enabled: bool
     fallback_run_tests_on_missing_report: bool
     fallback_test_command_candidates: List[str]
@@ -339,6 +355,16 @@ def load_config(path: Path) -> RuntimeConfig:
         init_max_runtime_seconds=int(init_cfg.get("max_runtime_seconds", 600)),
         progress_probe_message=cfg["progress_probe_message"],
         auto_confirm_reply=str(cfg.get("auto_confirm_reply", "yes")),
+        strict_require_real_report=bool(cfg.get("strict_require_real_report", False)),
+        save_cli_transcripts=bool(cfg.get("save_cli_transcripts", True)),
+        codex_resume_on_incomplete=bool(cfg.get("codex_resume_on_incomplete", True)),
+        codex_resume_max_attempts=max(0, int(cfg.get("codex_resume_max_attempts", 1))),
+        codex_resume_prompt=str(
+            cfg.get(
+                "codex_resume_prompt",
+                DEFAULT_CONFIG["codex_resume_prompt"],
+            )
+        ),
         fallback_enabled=bool(fb.get("enabled", True)),
         fallback_run_tests_on_missing_report=bool(fb.get("run_tests_on_missing_report", True)),
         fallback_test_command_candidates=[str(x) for x in fb.get("test_command_candidates", [])],
@@ -585,6 +611,14 @@ def has_clear_progress(line: str) -> bool:
 
 def prepare_prompt(cfg: RuntimeConfig, round_id: int, report_abs_path: Path, redo_reason: Optional[str]) -> str:
     extra = f"\n上次审核未通过原因：{redo_reason}\n请基于该原因修正后重新执行。\n" if redo_reason else ""
+    non_doc_gate = ""
+    if cfg.require_non_doc_code_changes or has_substantive_threshold(cfg):
+        non_doc_gate = (
+            f"\n改动门槛（非文档文件）:\n"
+            f"- 至少 {max(0, cfg.minimum_non_doc_files_changed)} 个非文档文件改动\n"
+            f"- 至少 {max(0, cfg.minimum_non_doc_lines_changed)} 行非文档改动（新增+删除）\n"
+            "- 不满足门槛视为失败，不能退出。\n"
+        )
     return f"""你是被{cfg.caller_name}调用的 AI 编程 CLI。
 
 目标项目：{cfg.project_name}（分支：{cfg.branch}）
@@ -606,6 +640,10 @@ def prepare_prompt(cfg: RuntimeConfig, round_id: int, report_abs_path: Path, red
 6) 不允许只输出计划后就退出；必须在本次进程中完成任务并写出报告。
 7) 如果无法达成成功结果，也必须写出 run_status=failed 的报告后再退出。
 8) 长任务时每20秒至少输出一条进度信息（例如 HEARTBEAT 30%）。
+9) 禁止只做分析或计划；必须完成实际代码改动并给出可验证结果。
+10) 禁止访问外部网页/外部仓库，优先使用当前仓库内信息与本地命令。
+11) 退出前必须输出一次 `git diff --name-status` 结果，确认已产生有效代码改动。
+{non_doc_gate}
 
 执行策略：
 - 对任何执行确认问题，默认继续执行。
@@ -774,7 +812,16 @@ def parse_rate(value: Any) -> float:
     return 0.0
 
 
-def audit_report(report: Dict[str, Any], min_rate: float) -> AuditResult:
+def audit_report(report: Dict[str, Any], min_rate: float, strict_require_real_report: bool) -> AuditResult:
+    if strict_require_real_report and bool(report.get("fallback_generated", False)):
+        return AuditResult(
+            approved=False,
+            run_success=False,
+            test_pass_rate=parse_rate(report.get("test_pass_rate", 0)),
+            core_optimization=str(report.get("core_optimization", "未提供核心优化说明")).strip(),
+            reason="缺少CLI原始报告（仅生成了fallback报告）",
+        )
+
     run_status = str(report.get("run_status", "")).strip().lower()
     run_success = run_status in {"success", "ok", "passed", "true"}
     rate = parse_rate(report.get("test_pass_rate", 0))
@@ -1240,6 +1287,69 @@ def format_cli_command(
     )
 
 
+def is_codex_tool(tool: CLIConfig) -> bool:
+    return "codex" in tool.name.strip().lower()
+
+
+def extract_codex_session_id(output_lines: List[str]) -> Optional[str]:
+    pattern = re.compile(r"session id:\s*([0-9a-fA-F-]{36})")
+    for line in output_lines:
+        m = pattern.search(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def write_cli_transcript(
+    cfg: RuntimeConfig,
+    round_id: int,
+    tool: CLIConfig,
+    phase: str,
+    attempt_no: int,
+    result: CLIExecutionResult,
+) -> Optional[Path]:
+    if not cfg.save_cli_transcripts:
+        return None
+    out_dir = cfg.log_dir / "cli_transcripts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out_path = out_dir / (
+        f"round{round_id:04d}_{cli_slug(tool.name)}_{phase}_attempt{attempt_no:02d}_{ts}.log"
+    )
+    header = [
+        f"time_utc: {datetime.now(timezone.utc).isoformat()}",
+        f"round_id: {round_id}",
+        f"tool: {tool.name}",
+        f"phase: {phase}",
+        f"attempt_no: {attempt_no}",
+        f"reason: {result.reason}",
+        f"terminated: {result.terminated}",
+        f"exit_code: {result.exit_code}",
+        f"duration_seconds: {result.duration_seconds:.2f}",
+        "---- output ----",
+    ]
+    payload = "\n".join(header + result.output_lines) + "\n"
+    out_path.write_text(payload, encoding="utf-8")
+    return out_path
+
+
+def prepare_codex_resume_prompt(cfg: RuntimeConfig, report_abs_path: Path, redo_reason: Optional[str]) -> str:
+    extra = f"\n上次失败原因：{redo_reason}\n" if redo_reason else ""
+    return f"""你刚才未完成任务，本次必须直接收敛到可交付结果。{extra}
+
+必须完成：
+1) 实际修改代码（禁止仅计划/仅说明/仅跑测试）；
+2) 运行自动化测试；
+3) 写入报告 JSON 到：{report_abs_path}
+4) 报告字段：run_status, test_pass_rate, core_optimization, iteration_value, test_summary
+5) 写完报告后输出：REPORT_READY
+
+限制：
+- 仅使用当前仓库与本地命令，不要访问外部网页或外部仓库。
+- 若无法完成成功结果，也要写 run_status=failed 报告后再退出。
+"""
+
+
 def prepare_init_prompt(cfg: RuntimeConfig, tool: CLIConfig, repo_dir: Path) -> str:
     required_paths = [str(x).strip() for x in tool.init_required_paths if str(x).strip()]
     if required_paths:
@@ -1456,6 +1566,7 @@ def run_cli_attempt(
     tool: CLIConfig,
     repo_dir: Path,
     round_id: int,
+    attempt_no: int,
     redo_reason: Optional[str],
     logger: EventLogger,
 ) -> Tuple[CLIExecutionResult, Optional[Dict[str, Any]]]:
@@ -1478,6 +1589,14 @@ def run_cli_attempt(
 
     logger.log("cli.start", tool=tool.name, command=cmd)
     result = monitor_cli_process(tool, cmd, repo_dir, prompt_text, cfg, logger)
+    transcript_path = write_cli_transcript(
+        cfg=cfg,
+        round_id=round_id,
+        tool=tool,
+        phase="task",
+        attempt_no=max(1, int(attempt_no)),
+        result=result,
+    )
     logger.log(
         "cli.finish",
         tool=tool.name,
@@ -1487,17 +1606,70 @@ def run_cli_attempt(
         duration_seconds=round(result.duration_seconds, 2),
         lines=len(result.output_lines),
         output_tail=result.output_lines[-20:],
+        transcript_path=str(transcript_path) if transcript_path else None,
     )
 
     report = load_report(repo_dir, cfg.report_path)
     if report is not None:
         logger.log("report.loaded", tool=tool.name, keys=list(report.keys()))
     else:
+        if cfg.codex_resume_on_incomplete and is_codex_tool(tool):
+            session_id = extract_codex_session_id(result.output_lines)
+            if session_id:
+                max_resume = max(0, int(cfg.codex_resume_max_attempts))
+                for resume_idx in range(1, max_resume + 1):
+                    resume_prompt = prepare_codex_resume_prompt(cfg, report_abs, redo_reason)
+                    resume_prompt_rel = ".openclaw/openclaw_resume_prompt.md"
+                    resume_prompt_path = write_prompt_file(repo_dir, resume_prompt_rel, resume_prompt)
+                    resume_cmd = (
+                        f"codex exec resume --full-auto "
+                        f"-c approval_policy=never -c model_reasoning_effort=high "
+                        f"-c sandbox_mode='workspace-write' "
+                        f"{shlex.quote(session_id)} - < {shlex.quote(str(resume_prompt_path))}"
+                    )
+                    logger.log(
+                        "cli.resume.start",
+                        tool=tool.name,
+                        session_id=session_id,
+                        resume_index=resume_idx,
+                        command=resume_cmd,
+                    )
+                    resume_result = monitor_cli_process(tool, resume_cmd, repo_dir, resume_prompt, cfg, logger)
+                    resume_transcript = write_cli_transcript(
+                        cfg=cfg,
+                        round_id=round_id,
+                        tool=tool,
+                        phase="resume",
+                        attempt_no=resume_idx,
+                        result=resume_result,
+                    )
+                    logger.log(
+                        "cli.resume.finish",
+                        tool=tool.name,
+                        session_id=session_id,
+                        resume_index=resume_idx,
+                        terminated=resume_result.terminated,
+                        reason=resume_result.reason,
+                        exit_code=resume_result.exit_code,
+                        duration_seconds=round(resume_result.duration_seconds, 2),
+                        output_tail=resume_result.output_lines[-20:],
+                        transcript_path=str(resume_transcript) if resume_transcript else None,
+                    )
+                    report = load_report(repo_dir, cfg.report_path)
+                    if report is not None:
+                        logger.log(
+                            "report.loaded",
+                            tool=tool.name,
+                            keys=list(report.keys()),
+                            source=f"resume_{resume_idx}",
+                        )
+                        break
         logger.log("report.missing", tool=tool.name)
-        fallback = build_fallback_report(cfg, tool, repo_dir, report_abs, result, logger)
-        if fallback is not None:
-            report = fallback
-            logger.log("report.loaded", tool=tool.name, keys=list(report.keys()), source="fallback")
+        if report is None:
+            fallback = build_fallback_report(cfg, tool, repo_dir, report_abs, result, logger)
+            if fallback is not None:
+                report = fallback
+                logger.log("report.loaded", tool=tool.name, keys=list(report.keys()), source="fallback")
     return result, report
 
 
@@ -1610,7 +1782,7 @@ def run_cli_attempt_interactive(
             exit_code=exit_code,
             reason="interactive_failed_without_report",
         )
-        return run_cli_attempt(cfg, tool, repo_dir, round_id, redo_reason, logger)
+        return run_cli_attempt(cfg, tool, repo_dir, round_id, 1, redo_reason, logger)
 
     fallback = build_fallback_report(cfg, tool, repo_dir, report_abs, result, logger)
     if fallback is not None:
@@ -1707,7 +1879,7 @@ def run_single_round_interactive(
             logger.log("audit.fail", tool=tool.name, reason=redo_reason, turn=turn, mode="interactive")
             continue
 
-        audit = audit_report(report, cfg.report_min_pass_rate)
+        audit = audit_report(report, cfg.report_min_pass_rate, cfg.strict_require_real_report)
         logger.log(
             "audit.result",
             tool=tool.name,
@@ -1897,7 +2069,15 @@ def run_single_round(
             if not refresh_repo_latest_from_remote(cfg, repo_dir, logger):
                 logger.log("cli.call_failed", tool=tool.name, reason="repo_refresh_failed", exit_code=None, error_keyword=None)
                 break
-            exec_result, report = run_cli_attempt(cfg, tool, repo_dir, round_id, redo_reason, logger)
+            exec_result, report = run_cli_attempt(
+                cfg,
+                tool,
+                repo_dir,
+                round_id,
+                audit_failures + 1,
+                redo_reason,
+                logger,
+            )
 
             call_failure = (
                 exec_result.terminated
@@ -1906,10 +2086,13 @@ def run_single_round(
             )
 
             if call_failure:
+                fail_reason = exec_result.reason
+                if (exec_result.exit_code not in (0, None)) and fail_reason == "completed":
+                    fail_reason = f"exit_code_{exec_result.exit_code}"
                 logger.log(
                     "cli.call_failed",
                     tool=tool.name,
-                    reason=exec_result.reason,
+                    reason=fail_reason,
                     exit_code=exec_result.exit_code,
                     error_keyword=exec_result.saw_error_keyword,
                 )
@@ -1926,7 +2109,7 @@ def run_single_round(
                 )
                 continue
 
-            audit = audit_report(report, cfg.report_min_pass_rate)
+            audit = audit_report(report, cfg.report_min_pass_rate, cfg.strict_require_real_report)
             logger.log(
                 "audit.result",
                 tool=tool.name,

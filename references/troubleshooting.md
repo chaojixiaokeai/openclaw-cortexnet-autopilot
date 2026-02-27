@@ -28,6 +28,17 @@ Fix:
 - ensure `.env` exports `GITHUB_TOKEN`
 - rerun doctor with `--check-github-token`
 
+## Symptom: Codex reports usage limit / no effective code changes
+Signature example:
+- output includes `ERROR: You've hit your usage limit`
+- `audit.fail` repeatedly appears after fallback report
+
+Fix:
+- wait for Codex quota reset or switch to Gemini/Open Code/Claude
+- keep `error_keywords` including `usage limit` and `upgrade to pro` so orchestrator switches quickly
+- keep `codex_resume_on_incomplete=true`; resume now runs in writable mode (`--full-auto` + workspace-write override)
+- inspect `logs/cli_transcripts/*codex*` to verify whether exit reason is quota, not code capability
+
 ## Symptom: No report produced
 Signature example:
 - `report.missing`
@@ -89,6 +100,9 @@ Signature example:
 Fix:
 - relax gate by setting `require_code_changes=false` when the repository is already in optimal state
 - or make `task_requirement` more concrete so the CLI can produce deterministic file changes
+- for Codex specifically, keep `codex_resume_on_incomplete=true` so incomplete runs are resumed in-session before fallback/switch
+- inspect `logs/cli_transcripts/*codex*` to verify whether Codex exited after planning without touching files
+- in production, set `strict_require_real_report=true` so fallback-only reports cannot mask incomplete runs
 
 ## Symptom: Round keeps retrying because only docs changed
 Signature example:

@@ -87,6 +87,8 @@ def main() -> int:
         cfg = load_json(workspace / "openclaw_config.json")
         assert_true(str(cfg.get("repo_url", "")).endswith("example/demo-repo.git"), "repo_url override missing")
         assert_true(cfg.get("project_name") == "demo-repo", "project_name mismatch")
+        assert_true(bool(cfg.get("strict_require_real_report", False)), "strict_require_real_report should be true in production profile")
+        assert_true(bool(cfg.get("save_cli_transcripts", False)), "save_cli_transcripts should be enabled")
         cli_tools = cfg.get("cli_tools", [])
         assert_true(isinstance(cli_tools, list) and len(cli_tools) >= 2, "cli_tools invalid")
         names = [str(item.get("name", "")) for item in cli_tools if isinstance(item, dict)]

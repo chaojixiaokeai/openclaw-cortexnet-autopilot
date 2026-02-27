@@ -18,6 +18,9 @@ This skill provides a full orchestration runtime and templates to run AI coding 
   - test pass rate must meet threshold
 - Commits and pushes with concrete change summary in commit message
 - Supports unattended loop mode and one-shot mode
+- Auto-resumes incomplete Codex runs (same session) before fallback/switch
+- Stores per-attempt CLI transcripts under `logs/cli_transcripts/` for root-cause debugging
+- Detects Codex quota failures (`usage limit` / `upgrade to pro`) and switches without hanging
 
 ## Substance Gates (to avoid tiny/doc-only updates)
 
@@ -27,6 +30,7 @@ Production profile enables strict quality gates by default:
 - `require_non_doc_code_changes=true`
 - `minimum_non_doc_files_changed=2`
 - `minimum_non_doc_lines_changed=30`
+- `strict_require_real_report=true` (fallback-only report cannot pass approval)
 
 If a round only changes docs or changes are below threshold, it is treated as failed and retried/switched.
 
@@ -139,6 +143,9 @@ python3 scripts/log_summary.py --log-dir /path/to/workdir/logs --tail-rounds 10
 
 # JSON
 python3 scripts/log_summary.py --log-dir /path/to/workdir/logs --json
+
+# Raw per-attempt transcripts (for deep diagnosis)
+ls -la /path/to/workdir/logs/cli_transcripts
 ```
 
 ## Contributor Smoke Test

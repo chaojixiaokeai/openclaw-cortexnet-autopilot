@@ -113,17 +113,21 @@ Keep these behaviors unless the user explicitly asks to change policy:
   - `15min` runtime: send progress probe.
   - `5min` no useful probe response: terminate and switch.
   - `30min` hard cap: terminate and switch.
+- Quota policy: `usage limit` / `upgrade to pro` style errors are treated as call failures and trigger switch.
 - Loop anomaly: repeated same operation output >3 times -> terminate.
 - Audit policy: report-only (`run_status`, `test_pass_rate`, summary fields).
 - Approval gate: `run_status` successful and `test_pass_rate >= 90`.
+- Optional strict gate: when `strict_require_real_report=true`, fallback-generated reports cannot pass approval.
 - Optional gate: when `require_code_changes=true`, rounds with no staged code changes are treated as failed and retried/switched.
 - Optional gate: when `require_non_doc_code_changes=true`, rounds with docs-only changes are treated as failed and retried/switched.
 - Substantive gate: when `minimum_non_doc_files_changed` / `minimum_non_doc_lines_changed` are set, rounds below threshold are treated as failed and retried/switched.
+- Codex incomplete-run fix: when report is missing, runtime can auto-resume the same Codex session once (`codex_resume_on_incomplete`) before fallback/switch.
 - Init gate: when enabled, CLI must pass one-time init phase (with timeout control) before entering task execution.
 - Init artifact gate: required init directories (such as `.codex`) must exist after init or the tool is switched.
 - Git policy: commit/push only to `dev`.
 - Git identity default: `ai <ai@local>`.
 - Commit message includes concrete change summary (`A/M/D + file paths`).
+- Diagnostics: if `save_cli_transcripts=true`, each task attempt writes a transcript under `logs/cli_transcripts/`.
 - On paused state, writes `logs/PAUSED_REASON.txt` for external monitors.
 
 Runtime override examples:

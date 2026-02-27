@@ -66,6 +66,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--interval", type=int, default=None, help="Override loop_interval_seconds")
     p.add_argument("--min-pass-rate", type=float, default=None, help="Override report_min_pass_rate")
     p.add_argument(
+        "--strict-real-report",
+        action="store_true",
+        help="Require CLI-native report for approval (fallback-only report cannot pass)",
+    )
+    p.add_argument(
         "--require-non-doc-code-changes",
         action="store_true",
         help="Require approved rounds to include non-doc code changes (docs-only changes fail the gate)",
@@ -226,6 +231,8 @@ def apply_config_overrides(config: Dict[str, object], args: argparse.Namespace) 
         config["loop_interval_seconds"] = int(args.interval)
     if args.min_pass_rate is not None:
         config["report_min_pass_rate"] = float(args.min_pass_rate)
+    if args.strict_real_report:
+        config["strict_require_real_report"] = True
     if args.require_code_changes:
         config["require_code_changes"] = True
     if args.require_non_doc_code_changes:
